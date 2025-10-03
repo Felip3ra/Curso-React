@@ -1,16 +1,17 @@
 // Importa os hooks necessários do React:
-// - useState: para gerenciar estados reativos
-// - useEffect: para executar efeitos colaterais (ex: persistência)
-// - useRef: para acessar elementos do DOM ou armazenar valores mutáveis sem causar re-render
-import { useState, useEffect, useRef } from 'react';
+// - useState: gerencia estados reativos
+// - useEffect: executa efeitos colaterais (ex: carregar/salvar no localStorage)
+// - useRef: acessa elementos do DOM ou armazena valores mutáveis sem causar re-render
+// - useMemo: memoriza cálculos pesados ou derivados para evitar recálculos desnecessários
+import { useState, useEffect, useRef, useMemo } from 'react';
 
-// Componente principal da aplicação: lista de tarefas com adição, edição, exclusão e persistência no localStorage
+// Componente principal da aplicação: lista de tarefas com adição, edição, exclusão, persistência e contador
 export default function App() {
 
-  // Referência ao elemento <input> para permitir foco programático
+  // Referência ao elemento <input> para permitir foco programático (melhora UX)
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Flag para identificar a primeira renderização (evita salvar no localStorage na inicialização)
+  // Flag para identificar a primeira renderização (evita salvar no localStorage logo na inicialização)
   const firstRender = useRef(true);
 
   // Estado que armazena a lista de tarefas (inicialmente vazio)
@@ -32,7 +33,17 @@ export default function App() {
     
     // Se existirem dados salvos, converte de JSON para array e atualiza o estado
     if (tarefasSalvas) {
-      setTasks(JSON.parse(tarefasSalvas));
+      try {
+        // ⚠️ Boa prática: usar try/catch ao fazer JSON.parse, pois o localStorage pode conter dados corrompidos
+        const parsed = JSON.parse(tarefasSalvas);
+        if (Array.isArray(parsed)) {
+          setTasks(parsed);
+        }
+      } catch (error) {
+        console.warn("Erro ao carregar tarefas do localStorage:", error);
+        // Opcional: limpar o localStorage em caso de erro
+        // localStorage.removeItem("@cursoReact");
+      }
     }
     // Dependência vazia: executa apenas uma vez, na montagem do componente
   }, []);
@@ -107,9 +118,15 @@ export default function App() {
     // Ativa o modo de edição
     setEditTask({ enable: true, task: item });
 
-    // Dá foco automático ao campo de entrada para melhorar a UX
+    // Dá foco automático ao campo de entrada para melhorar a experiência do usuário
     inputRef.current?.focus();
   }
+
+  // useMemo: memoriza o cálculo do total de tarefas
+  // Evita recalcular desnecessariamente em cada re-render (embora .length seja leve, é um bom exemplo de uso)
+  const totalTarefas = useMemo(() => {
+    return tasks.length;
+  }, [tasks]); // Recalcula apenas quando 'tasks' mudar
 
   // Renderização do componente
   return (
@@ -131,6 +148,11 @@ export default function App() {
       </button>
 
       <hr />
+
+      {/* Exibe o total de tarefas usando o valor memorizado */}
+      <strong>Você tem {totalTarefas} tarefa{totalTarefas !== 1 ? 's' : ''}</strong>
+      <br />
+      <br />
 
       {/* Renderiza cada tarefa com botões de ação */}
       {tasks.map((item) => (
