@@ -2,8 +2,9 @@
 // - useState: gerencia estados reativos
 // - useEffect: executa efeitos colaterais (ex: carregar/salvar no localStorage)
 // - useRef: acessa elementos do DOM ou armazena valores mutáveis sem causar re-render
-// - useMemo: memoriza cálculos pesados ou derivados para evitar recálculos desnecessários
-import { useState, useEffect, useRef, useMemo } from 'react';
+// - useMemo: memoriza cálculos derivados para evitar recálculos desnecessários
+// - useCallback: memoriza funções para evitar recriações desnecessárias em re-renders
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 // Componente principal da aplicação: lista de tarefas com adição, edição, exclusão, persistência e contador
 export default function App() {
@@ -28,40 +29,35 @@ export default function App() {
 
   // Efeito que carrega as tarefas salvas no localStorage ao montar o componente
   useEffect(() => {
-    // Tenta recuperar os dados salvos com a chave "@cursoReact"
     const tarefasSalvas = localStorage.getItem("@cursoReact");
-    
-    // Se existirem dados salvos, converte de JSON para array e atualiza o estado
     if (tarefasSalvas) {
       try {
-        // ⚠️ Boa prática: usar try/catch ao fazer JSON.parse, pois o localStorage pode conter dados corrompidos
+        // Validação robusta: evita falhas se o localStorage estiver corrompido
         const parsed = JSON.parse(tarefasSalvas);
         if (Array.isArray(parsed)) {
           setTasks(parsed);
         }
       } catch (error) {
         console.warn("Erro ao carregar tarefas do localStorage:", error);
-        // Opcional: limpar o localStorage em caso de erro
+        // Opcional: limpar dados inválidos
         // localStorage.removeItem("@cursoReact");
       }
     }
-    // Dependência vazia: executa apenas uma vez, na montagem do componente
+    // Executa apenas na montagem inicial
   }, []);
 
   // Efeito que salva automaticamente as tarefas no localStorage sempre que a lista muda
   useEffect(() => {
-    // Ignora a primeira execução (quando o componente é montado e carrega dados do localStorage)
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
-
-    // Salva a lista atualizada no localStorage
     localStorage.setItem("@cursoReact", JSON.stringify(tasks));
-  }, [tasks]); // Executa sempre que 'tasks' for atualizado
+  }, [tasks]);
 
-  // Função acionada ao clicar em "Adicionar" ou "Atualizar"
-  function handleRegister() {
+  // useCallback: memoriza a função handleRegister para evitar recriações em cada re-render
+  // Isso é útil se essa função for passada como prop para componentes filhos (mesmo que não seja o caso agora, é uma boa prática em aplicações maiores)
+  const handleRegister = useCallback(() => {
     // Validação: impede envio de tarefa vazia ou com apenas espaços
     if (!inputValue.trim()) {
       alert('Digite uma tarefa válida');
@@ -77,86 +73,69 @@ export default function App() {
     // Adiciona nova tarefa à lista
     const novaLista = [...tasks, inputValue];
     setTasks(novaLista);
-
-    // Limpa o campo de entrada
-    setInputValue('');
-  }
+    setInputValue(''); // Limpa o input após adicionar
+  }, [inputValue, tasks, editTask.enable]); // Dependências: tudo que a função usa externamente
 
   // Função para excluir uma tarefa
+  // ⚠️ Poderia ser envolvida em useCallback se passada para filhos, mas aqui é usada inline
   function handleDelete(item: string) {
-    // Cria uma nova lista sem a tarefa selecionada
     const novaLista = tasks.filter(task => task !== item);
     setTasks(novaLista);
-    // A persistência ocorrerá automaticamente pelo useEffect acima
+    // Persistência automática via useEffect
   }
 
   // Função que finaliza a edição de uma tarefa
   function handleSaveEdit() {
-    // Encontra o índice da tarefa original na lista
     const index = tasks.findIndex(task => task === editTask.task);
+    if (index === -1) return; // Segurança: tarefa não encontrada
 
-    // Verifica se a tarefa ainda existe (segurança contra alterações concorrentes)
-    if (index === -1) return;
-
-    // Cria uma cópia da lista e atualiza a tarefa editada
     const novaLista = [...tasks];
     novaLista[index] = inputValue;
-
-    // Atualiza o estado
     setTasks(novaLista);
 
-    // Sai do modo de edição
+    // Reseta o modo de edição
     setEditTask({ enable: false, task: '' });
-    // Limpa o campo de entrada
     setInputValue('');
   }
 
   // Função chamada ao clicar em "Editar"
   function handleEdit(item: string) {
-    // Preenche o input com o texto da tarefa a ser editada
     setInputValue(item);
-    // Ativa o modo de edição
     setEditTask({ enable: true, task: item });
-
-    // Dá foco automático ao campo de entrada para melhorar a experiência do usuário
-    inputRef.current?.focus();
+    inputRef.current?.focus(); // Foco automático no input
   }
 
-  // useMemo: memoriza o cálculo do total de tarefas
-  // Evita recalcular desnecessariamente em cada re-render (embora .length seja leve, é um bom exemplo de uso)
-  const totalTarefas = useMemo(() => {
-    return tasks.length;
-  }, [tasks]); // Recalcula apenas quando 'tasks' mudar
+  // useMemo: memoriza o total de tarefas
+  // Embora .length seja leve, demonstra boas práticas de otimização
+  const totalTarefas = useMemo(() => tasks.length, [tasks]);
 
   // Renderização do componente
   return (
     <div>
       <h1>Lista de Tarefas</h1>
 
-      {/* Input controlado pelo estado 'inputValue' e com referência para foco programático */}
       <input
         type="text"
         placeholder="Digite uma tarefa"
         onChange={(e) => setInputValue(e.target.value)}
         value={inputValue}
-        ref={inputRef} // Associa a referência ao elemento DOM
+        ref={inputRef}
       />
 
-      {/* Botão com texto dinâmico conforme o modo atual */}
       <button onClick={handleRegister}>
         {editTask.enable ? "Atualizar" : "Adicionar"}
       </button>
 
       <hr />
 
-      {/* Exibe o total de tarefas usando o valor memorizado */}
+      {/* Pluralização correta: "1 tarefa" vs "X tarefas" */}
       <strong>Você tem {totalTarefas} tarefa{totalTarefas !== 1 ? 's' : ''}</strong>
       <br />
       <br />
 
-      {/* Renderiza cada tarefa com botões de ação */}
+      {/* Renderiza cada tarefa */}
       {tasks.map((item) => (
-        <section key={item}> {/* ⚠️ Aviso: usar 'item' como key pode causar problemas se houver duplicatas */}
+        <section key={item}> {/* ⚠️ Aviso: usar o texto como key é arriscado com duplicatas */}
           <span>{item}</span>
           <button onClick={() => handleEdit(item)}>Editar</button>
           <button onClick={() => handleDelete(item)}>Excluir</button>
