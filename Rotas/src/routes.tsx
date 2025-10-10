@@ -5,8 +5,12 @@ import { Sobre } from "./pages/sobre";
 import { Contato } from "./pages/contato";
 import { Produto } from "./pages/produto";
 import { NotFound } from "./pages/notfound";
+import { Layout } from "./components/layout";
 const router = createBrowserRouter([
     {
+        element: <Layout/>,
+        children: [
+            {
         path: "/",
         element: <Home/>
     },
@@ -26,6 +30,8 @@ const router = createBrowserRouter([
         //ultima rota, caso nenhuma das outras seja encontrada
         path: "*",
         element: <NotFound/>
+    }
+        ]
     }
 ])
 
